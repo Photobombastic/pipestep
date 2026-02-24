@@ -1,0 +1,78 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main]
+
+env:
+  CI: "true"
+  APP_ENV: "test"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_VERSION: "18"
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Show environment
+        run: |
+          echo "CI=$CI"
+          echo "APP_ENV=$APP_ENV"
+          echo "NODE_VERSION=$NODE_VERSION"
+          echo "Working directory: $(pwd)"
+          echo "User: $(whoami)"
+
+      - name: Create project structure
+        run: |
+          mkdir -p src tests
+          echo '{"name": "demo-app", "version": "1.0.0"}' > package.json
+          echo 'console.log("Hello from demo-app")' > src/index.js
+          echo 'echo "All tests passed"' > tests/run.sh
+          chmod +x tests/run.sh
+          ls -la
+
+      - name: Install dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq curl > /dev/null 2>&1
+          echo "Dependencies installed successfully"
+
+      - name: Run linter
+        env:
+          LINT_STRICT: "false"
+        run: |
+          echo "Linting src/..."
+          # Simulate lint check
+          for f in src/*.js; do
+            echo "  ✓ $f — no issues"
+          done
+          echo "Lint passed"
+
+      - name: Run tests
+        run: |
+          echo "Running test suite..."
+          bash tests/run.sh
+          echo "Test suite complete: 1 passed, 0 failed"
+
+      - name: Build artifact
+        run: |
+          echo "Building..."
+          mkdir -p dist
+          cp src/index.js dist/
+          echo "Build complete. Artifact in dist/"
+          ls -la dist/
+
+      - name: Verify build
+        run: |
+          if [ -f dist/index.js ]; then
+            echo "✓ Build artifact verified"
+            echo "Size: $(wc -c < dist/index.js) bytes"
+          else
+            echo "✗ Build artifact missing!"
+            exit 1
+          fi

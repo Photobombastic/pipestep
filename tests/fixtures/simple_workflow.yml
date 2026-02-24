@@ -1,0 +1,36 @@
+name: Test CI
+
+on:
+  push:
+    branches: [main]
+
+env:
+  CI: "true"
+  GLOBAL_VAR: "from_workflow"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      JOB_VAR: "from_job"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show env
+        run: echo "hello"
+        env:
+          STEP_VAR: "from_step"
+
+      - name: Multi-line command
+        run: |
+          echo "line 1"
+          echo "line 2"
+
+      - run: echo "unnamed step"
+
+      - name: Custom workdir
+        run: echo "in subdir"
+        working-directory: /workspace/src

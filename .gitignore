@@ -1,4 +1,30 @@
+# Virtual environment
 .venv/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Testing
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Internal (not for public repo)
+docs/
+files3.zip
+pipestep-prototype-spec.md

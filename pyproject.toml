@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pipestep"
+dynamic = ["version"]
+description = "Interactive CI pipeline debugger. Step through GitHub Actions workflows locally with Docker."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Maxwell Schilling" },
+]
+keywords = ["ci", "github-actions", "docker", "debugger", "pipeline"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+    "docker",
+    "textual",
+    "pyyaml",
+    "rich",
+]
+
+[project.scripts]
+pipestep = "pipestep.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/photobombastic/pipestep"
+Repository = "https://github.com/photobombastic/pipestep"
+Issues = "https://github.com/photobombastic/pipestep/issues"
+
+[tool.hatch.version]
+path = "pipestep/__init__.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

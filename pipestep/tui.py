@@ -260,20 +260,22 @@ class PipeStepApp(App):
         self._update_detail_panel()
         self.running = False
 
-        # If auto-running, advance to next
-        if self._auto_running and step.status == StepStatus.COMPLETED:
+        if step.status == StepStatus.COMPLETED:
+            # Always advance to the next step after completion
             self._advance_to_next()
             next_step = self._current_step()
             if next_step is None:
                 self._auto_running = False
                 return
-            if next_step.breakpoint:
-                self._auto_running = False
-                self._log(f"\n[cyan]● Breakpoint hit: {next_step.name}[/cyan]")
-                self._log("  Press [bold]R[/bold] to run, [bold]I[/bold] to inspect")
-            else:
-                # Continue auto-running
-                self.action_run_step()
+            if self._auto_running:
+                if next_step.breakpoint:
+                    self._auto_running = False
+                    self._log(f"\n[cyan]● Breakpoint hit: {next_step.name}[/cyan]")
+                    self._log("  Press [bold]R[/bold] to run, [bold]I[/bold] to inspect")
+                else:
+                    # Continue auto-running
+                    self.action_run_step()
+            # If not auto-running, we just pause at the next step (advance already happened)
         elif self._auto_running:
             self._auto_running = False
 

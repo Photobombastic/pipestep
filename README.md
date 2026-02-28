@@ -32,11 +32,8 @@ Requires Python 3.11+ and Docker Desktop running.
 ## Quick Start
 
 ```bash
-# Point it at any GitHub Actions workflow
+# Point it at any GitHub Actions workflow in your project
 pipestep run .github/workflows/ci.yml
-
-# Or try the included sample
-pipestep run sample_workflow.yml
 ```
 
 ## Controls

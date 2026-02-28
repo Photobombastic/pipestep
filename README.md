@@ -88,6 +88,7 @@ PipeStep runs your `run:` steps in a local Docker container. It does **not** rep
 - **Artifact upload/download** actions won't run
 - **`GITHUB_TOKEN`** and GitHub API access are not provided
 - **Runner OS** is mapped to stock Docker images (`ubuntu-latest` → `ubuntu:22.04`) — pre-installed tools on GitHub's runners may be missing
+- **Apple Silicon** — Docker runs x86 Linux images through emulation on M-series Macs, which is noticeably slower
 
 These are real constraints. PipeStep's value is debugging your **shell commands** (`run:` steps) in the exact container environment — not emulating the full GitHub Actions platform. For full local runs, use [`act`](https://github.com/nektos/act).
 

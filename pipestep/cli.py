@@ -1,5 +1,6 @@
 import sys
 import os
+import yaml
 from pipestep import __version__
 from pipestep.parser import parse_workflow
 
@@ -13,6 +14,10 @@ def main():
     except ValueError as e:
         print(f"Error: {e}")
         sys.exit(1)
+    except yaml.YAMLError as e:
+        print(f"Error: Invalid YAML syntax")
+        print(f"  {e}")
+        sys.exit(1)
 
 
 def _run():
@@ -20,14 +25,24 @@ def _run():
         print(f"pipestep {__version__}")
         sys.exit(0)
 
+    if len(sys.argv) >= 2 and sys.argv[1] in ("--help", "-h"):
+        _print_help()
+        sys.exit(0)
+
     if len(sys.argv) < 3 or sys.argv[1] != "run":
-        print("Usage: pipestep run <workflow.yml> [--workdir <path>]")
-        print("  Example: pipestep run .github/workflows/ci.yml")
+        _print_help()
         sys.exit(1)
+
+    if sys.argv[2] in ("--help", "-h"):
+        _print_help()
+        sys.exit(0)
 
     workflow_path = sys.argv[2]
     if not os.path.exists(workflow_path):
         print(f"Error: File not found: {workflow_path}")
+        sys.exit(1)
+    if not os.path.isfile(workflow_path):
+        print(f"Error: Not a file: {workflow_path}")
         sys.exit(1)
 
     workdir = "."
@@ -35,6 +50,9 @@ def _run():
         idx = sys.argv.index("--workdir")
         if idx + 1 < len(sys.argv):
             workdir = sys.argv[idx + 1]
+        else:
+            print("Error: --workdir requires a path argument")
+            sys.exit(1)
 
     workdir = os.path.abspath(workdir)
 
@@ -70,11 +88,33 @@ def _run():
     print(f"\nJob: {job.name}")
     print(f"Image: {job.docker_image}")
     print(f"Steps: {len(job.steps)} total, {len(run_steps)} runnable")
+
+    if len(run_steps) == 0:
+        print("\nError: This workflow has no runnable steps — only GitHub Actions (uses:).")
+        print("PipeStep can only debug shell commands (run: steps).")
+        print("See: https://github.com/photobombastic/pipestep#limitations")
+        sys.exit(1)
+
     print()
 
     from pipestep.tui import PipeStepApp
     app = PipeStepApp(workflow=workflow, job=job, workdir=workdir)
     app.run()
+
+
+def _print_help():
+    print(f"pipestep {__version__} — Interactive CI pipeline debugger")
+    print()
+    print("Usage: pipestep run <workflow.yml> [options]")
+    print()
+    print("Options:")
+    print("  --workdir <path>  Directory to mount as /workspace (default: .)")
+    print("  --version, -V     Show version")
+    print("  --help, -h        Show this help")
+    print()
+    print("Example:")
+    print("  pipestep run .github/workflows/ci.yml")
+    print("  pipestep run ci.yml --workdir /path/to/project")
 
 
 if __name__ == "__main__":

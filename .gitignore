@@ -24,7 +24,6 @@ Thumbs.db
 # Claude Code
 .claude/
 
-# Internal (not for public repo)
 docs/
 files3.zip
 pipestep-prototype-spec.md

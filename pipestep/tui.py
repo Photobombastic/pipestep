@@ -3,6 +3,7 @@ import subprocess
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, RichLog, ListView, ListItem, Label
+from textual.css.query import NoMatches
 from textual.reactive import reactive
 from textual import work
 from rich.markup import escape
@@ -40,7 +41,10 @@ class StepListItem(ListItem):
         return icons.get(self.step.status, " ")
 
     def refresh_label(self) -> None:
-        self.query_one(Label).update(self._render_label())
+        try:
+            self.query_one(Label).update(self._render_label())
+        except NoMatches:
+            pass
 
 
 class StepDetailPanel(Static):
@@ -105,7 +109,7 @@ class PipeStepApp(App):
         ("s", "skip_step", "Skip"),
         ("i", "shell_in", "Shell In"),
         ("b", "toggle_breakpoint", "Breakpoint"),
-        ("n", "run_to_breakpoint", "Next BP"),
+        ("n", "run_to_breakpoint", "Run to BP"),
         ("q", "quit_app", "Quit"),
     ]
 
@@ -121,6 +125,7 @@ class PipeStepApp(App):
         atexit.register(self.engine.cleanup)
         self.title = f"PipeStep — {workflow.name} → {job.name}"
         self._auto_running = False
+        self._quit_pending = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -133,7 +138,7 @@ class PipeStepApp(App):
                 yield StepDetailPanel(id="step-detail")
                 yield RichLog(highlight=True, markup=True, auto_scroll=True, id="output-log")
                 yield Static(
-                    "[R]un  [S]kip  [I]nspect Shell  [B]reakpoint  [N]ext BP  [Q]uit",
+                    "[R]un  [S]kip  [I]nspect Shell  [B]reakpoint  [N] Run to BP  [Q]uit",
                     id="help-bar",
                 )
         yield Footer()
@@ -142,6 +147,12 @@ class PipeStepApp(App):
         self._log("[bold]PipeStep[/bold] — Interactive CI Pipeline Debugger")
         self._log(f"Workflow: {self.workflow.name}")
         self._log(f"Job: {self.job.name} ({self.job.docker_image})")
+
+        # Show parser warnings in the TUI (e.g., unmapped runs-on)
+        if hasattr(self.workflow, '_parser_warnings'):
+            for warn in self.workflow._parser_warnings:
+                self._log(f"[yellow]  ⚠ {warn}[/yellow]")
+
         self._log("")
         self._log("Setting up Docker container...")
         self._setup_engine()
@@ -167,7 +178,10 @@ class PipeStepApp(App):
                 self._select_step(i)
                 self._log(f"[cyan]● Paused at: {step.name}[/cyan]")
                 self._log("  Press [bold]R[/bold] to run, [bold]S[/bold] to skip, [bold]I[/bold] to inspect")
-                break
+                return
+        # All steps are actions — nothing runnable
+        self._log("[yellow]No runnable steps found. All steps are GitHub Actions (uses:).[/yellow]")
+        self._log("PipeStep can only debug run: steps. Press [bold]Q[/bold] to quit.")
 
     def _current_step(self) -> Step | None:
         if 0 <= self.current_step_index < len(self.job.steps):
@@ -182,13 +196,13 @@ class PipeStepApp(App):
         if step:
             try:
                 self.query_one(StepDetailPanel).update_step(step, self.job)
-            except Exception:
+            except NoMatches:
                 pass
 
     def _log(self, message: str) -> None:
         try:
             self.query_one("#output-log", RichLog).write(message)
-        except Exception:
+        except NoMatches:
             pass
 
     def _refresh_step(self, index: int) -> None:
@@ -196,14 +210,14 @@ class PipeStepApp(App):
             items = self.query_one("#step-list", ListView).children
             if 0 <= index < len(items):
                 items[index].refresh_label()
-        except Exception:
+        except NoMatches:
             pass
 
     def _select_step(self, index: int) -> None:
         try:
             list_view = self.query_one("#step-list", ListView)
             list_view.index = index
-        except Exception:
+        except NoMatches:
             pass
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
@@ -214,12 +228,14 @@ class PipeStepApp(App):
 
     def action_run_step(self) -> None:
         if self.running:
+            self.notify("Step is still running...", severity="information")
             return
         step = self._current_step()
         if step is None or step.is_action:
             return
         if step.status not in (StepStatus.PAUSED, StepStatus.PENDING, StepStatus.FAILED):
             return
+        self._quit_pending = False
         self.running = True
         step.status = StepStatus.RUNNING
         self._refresh_step(self.current_step_index)
@@ -307,10 +323,12 @@ class PipeStepApp(App):
 
     def action_skip_step(self) -> None:
         if self.running:
+            self.notify("Step is still running...", severity="information")
             return
         step = self._current_step()
         if step is None:
             return
+        self._quit_pending = False
         step.status = StepStatus.SKIPPED
         self._refresh_step(self.current_step_index)
         self._log(f"[dim]  ⊘ Skipped: {step.name}[/dim]")
@@ -321,15 +339,30 @@ class PipeStepApp(App):
             self.notify("No container running", severity="error")
             return
         container_id = self.engine.container_id
+        step = self._current_step()
+
+        # Build docker exec command with step's env vars and working directory
+        cmd = ["docker", "exec", "-it"]
+        if step:
+            for k, v in step.env.items():
+                cmd.extend(["-e", f"{k}={v}"])
+            workdir = step.working_directory or "/workspace"
+            cmd.extend(["-w", workdir])
+        else:
+            cmd.extend(["-w", "/workspace"])
+
         self._log("\n[cyan]Launching interactive shell... (type 'exit' to return)[/cyan]")
         with self.suspend():
-            ret = subprocess.call(["docker", "exec", "-it", container_id, "/bin/bash"])
+            ret = subprocess.call(cmd + [container_id, "/bin/bash"])
             if ret != 0:
-                subprocess.call(["docker", "exec", "-it", container_id, "/bin/sh"])
+                subprocess.call(cmd + [container_id, "/bin/sh"])
         self._log("[cyan]Returned from shell.[/cyan]\n")
 
     def action_toggle_breakpoint(self) -> None:
-        list_view = self.query_one("#step-list", ListView)
+        try:
+            list_view = self.query_one("#step-list", ListView)
+        except NoMatches:
+            return
         highlighted = list_view.index
         if highlighted is not None and 0 <= highlighted < len(self.job.steps):
             step = self.job.steps[highlighted]
@@ -339,19 +372,37 @@ class PipeStepApp(App):
             step.breakpoint = not step.breakpoint
             tag = "set" if step.breakpoint else "removed"
             self._log(f"[magenta]  Breakpoint {tag}: {step.name}[/magenta]")
+            if step.breakpoint:
+                self._log("[dim]  Press N to auto-run all steps until this breakpoint.[/dim]")
             self._refresh_step(highlighted)
 
     def action_run_to_breakpoint(self) -> None:
         if self.running:
+            self.notify("Step is still running...", severity="information")
             return
         step = self._current_step()
         if step is None:
             return
+        self._quit_pending = False
         self._auto_running = True
         self._log("\n[dim]Auto-running to next breakpoint...[/dim]")
         self.action_run_step()
 
     def action_quit_app(self) -> None:
+        if self.running:
+            self.notify("Step is running. Press Q again to force quit.", severity="warning")
+            if self._quit_pending:
+                self._do_quit()
+            else:
+                self._quit_pending = True
+            return
+        if not self._quit_pending:
+            self._quit_pending = True
+            self.notify("Press Q again to quit and destroy the container.", severity="warning")
+            return
+        self._do_quit()
+
+    def _do_quit(self) -> None:
         self._log("\nCleaning up container...")
         self.engine.cleanup()
         self.exit()

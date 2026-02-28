@@ -1,9 +1,14 @@
 import sys
 import os
+from pipestep import __version__
 from pipestep.parser import parse_workflow
 
 
 def main():
+    if len(sys.argv) == 2 and sys.argv[1] in ("--version", "-V"):
+        print(f"pipestep {__version__}")
+        sys.exit(0)
+
     if len(sys.argv) < 3 or sys.argv[1] != "run":
         print("Usage: python cli.py run <workflow.yml> [--workdir <path>]")
         print("  Example: python cli.py run sample_workflow.yml")

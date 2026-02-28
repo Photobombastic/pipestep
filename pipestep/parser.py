@@ -1,8 +1,10 @@
+import sys
 import yaml
 from pipestep.models import Workflow, Job, Step
 
 IMAGE_MAP = {
     "ubuntu-latest": "ubuntu:22.04",
+    "ubuntu-24.04": "ubuntu:24.04",
     "ubuntu-22.04": "ubuntu:22.04",
     "ubuntu-20.04": "ubuntu:20.04",
 }
@@ -30,6 +32,8 @@ def parse_workflow(path: str) -> Workflow:
     for job_id, job_raw in raw.get("jobs", {}).items():
         runs_on = job_raw.get("runs-on", "ubuntu-latest")
         docker_image = IMAGE_MAP.get(runs_on, "ubuntu:22.04")
+        if runs_on not in IMAGE_MAP:
+            print(f"\u26a0 Warning: '{runs_on}' has no local Docker mapping. Using ubuntu:22.04 as fallback.", file=sys.stderr)
         job_env = _str_dict(job_raw.get("env", {}))
 
         steps = []

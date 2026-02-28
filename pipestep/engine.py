@@ -7,7 +7,12 @@ class PipelineEngine:
     def __init__(self, job: Job, workdir: str = "."):
         self.job = job
         self.workdir = workdir
-        self.client = docker.from_env()
+        try:
+            self.client = docker.from_env()
+            self.client.ping()
+        except docker.errors.DockerException:
+            print("Error: Can't connect to Docker. Is Docker Desktop running?")
+            raise SystemExit(1)
         self.container = None
         self._container_name = f"pipestep-{job.name}"
 

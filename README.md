@@ -77,6 +77,20 @@ No more guessing from log output. You're inside the environment where it broke.
 
 [`act`](https://github.com/nektos/act) is great for running pipelines locally. PipeStep is for when things go wrong and you need to figure out why.
 
+## Limitations
+
+PipeStep runs your `run:` steps in a local Docker container. It does **not** replicate the full GitHub Actions runtime:
+
+- **GitHub Actions (`uses:`)** are detected and skipped — they're shown in the step list but not executed locally
+- **Secrets and `${{ secrets.* }}`** are not available — replace them with local env vars or hardcode test values in the container
+- **Service containers** (`services:`) are not started
+- **Matrix builds** (`strategy.matrix`) are not expanded — pick one combination and test it
+- **Artifact upload/download** actions won't run
+- **`GITHUB_TOKEN`** and GitHub API access are not provided
+- **Runner OS** is mapped to stock Docker images (`ubuntu-latest` → `ubuntu:22.04`) — pre-installed tools on GitHub's runners may be missing
+
+These are real constraints. PipeStep's value is debugging your **shell commands** (`run:` steps) in the exact container environment — not emulating the full GitHub Actions platform. For full local runs, use [`act`](https://github.com/nektos/act).
+
 ## Contributing
 
 ```bash

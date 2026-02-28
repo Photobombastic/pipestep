@@ -1,9 +1,11 @@
+import atexit
 import subprocess
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, RichLog, ListView, ListItem, Label
 from textual.reactive import reactive
 from textual import work
+from rich.markup import escape
 
 from pipestep.models import Step, Job, Workflow, StepStatus, StepResult
 from pipestep.engine import PipelineEngine
@@ -24,7 +26,7 @@ class StepListItem(ListItem):
         icon = self._status_icon()
         bp = " [magenta][B][/magenta]" if self.step.breakpoint else ""
         tag = " [dim](action — skipped)[/dim]" if self.step.is_action else ""
-        return f"{icon} {self.step_index + 1}. {self.step.name}{tag}{bp}"
+        return f"{icon} {self.step_index + 1}. {escape(self.step.name)}{tag}{bp}"
 
     def _status_icon(self) -> str:
         icons = {
@@ -116,6 +118,7 @@ class PipeStepApp(App):
         self.job = job
         self.workdir = workdir
         self.engine = PipelineEngine(job=job, workdir=workdir)
+        atexit.register(self.engine.cleanup)
         self.title = f"PipeStep — {workflow.name} → {job.name}"
         self._auto_running = False
 
@@ -243,10 +246,10 @@ class PipeStepApp(App):
 
         if result.stdout:
             for line in result.stdout.rstrip().split("\n"):
-                self._log(f"  {line}")
+                self._log(f"  {escape(line)}")
         if result.stderr:
             for line in result.stderr.rstrip().split("\n"):
-                self._log(f"  [red]{line}[/red]")
+                self._log(f"  [red]{escape(line)}[/red]")
 
         if result.exit_code == 0:
             step.status = StepStatus.COMPLETED
@@ -320,7 +323,9 @@ class PipeStepApp(App):
         container_id = self.engine.container_id
         self._log("\n[cyan]Launching interactive shell... (type 'exit' to return)[/cyan]")
         with self.suspend():
-            subprocess.call(["docker", "exec", "-it", container_id, "/bin/bash"])
+            ret = subprocess.call(["docker", "exec", "-it", container_id, "/bin/bash"])
+            if ret != 0:
+                subprocess.call(["docker", "exec", "-it", container_id, "/bin/sh"])
         self._log("[cyan]Returned from shell.[/cyan]\n")
 
     def action_toggle_breakpoint(self) -> None:

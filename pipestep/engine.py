@@ -90,7 +90,7 @@ class PipelineEngine:
     def get_files(self, path: str = "/workspace") -> list[str]:
         if self.container is None:
             return []
-        result = self.container.exec_run(f"ls -1 {path}", demux=True)
+        result = self.container.exec_run(f"ls -1 {_shell_quote(path)}", demux=True)
         stdout = result.output[0].decode() if result.output[0] else ""
         return [f for f in stdout.strip().split("\n") if f]
 

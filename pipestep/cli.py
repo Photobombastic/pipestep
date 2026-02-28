@@ -5,13 +5,24 @@ from pipestep.parser import parse_workflow
 
 
 def main():
+    try:
+        _run()
+    except KeyboardInterrupt:
+        print()
+        sys.exit(130)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
+def _run():
     if len(sys.argv) == 2 and sys.argv[1] in ("--version", "-V"):
         print(f"pipestep {__version__}")
         sys.exit(0)
 
     if len(sys.argv) < 3 or sys.argv[1] != "run":
-        print("Usage: python cli.py run <workflow.yml> [--workdir <path>]")
-        print("  Example: python cli.py run sample_workflow.yml")
+        print("Usage: pipestep run <workflow.yml> [--workdir <path>]")
+        print("  Example: pipestep run .github/workflows/ci.yml")
         sys.exit(1)
 
     workflow_path = sys.argv[2]
@@ -48,8 +59,11 @@ def main():
                 if 0 <= choice < len(workflow.jobs):
                     job = workflow.jobs[choice]
                     break
-            except (ValueError, EOFError):
+            except ValueError:
                 pass
+            except EOFError:
+                print("\nError: Non-interactive terminal. Use a single-job workflow.")
+                sys.exit(1)
             print("Invalid choice. Try again.")
 
     run_steps = [s for s in job.steps if not s.is_action]

@@ -32,6 +32,9 @@ dependencies = [
     "rich",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest"]
+
 [project.scripts]
 pipestep = "pipestep.cli:main"
 

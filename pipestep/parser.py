@@ -14,6 +14,12 @@ def parse_workflow(path: str) -> Workflow:
     with open(path) as f:
         raw = yaml.safe_load(f)
 
+    if not isinstance(raw, dict):
+        raise ValueError(f"Invalid workflow file: expected YAML mapping, got {type(raw).__name__}")
+
+    if not isinstance(raw.get("jobs", raw.get(True)), dict):
+        raise ValueError("Invalid workflow file: no 'jobs' section found")
+
     name = raw.get("name", "Unnamed Workflow")
 
     trigger_raw = raw.get("on", raw.get(True, {}))
@@ -73,4 +79,4 @@ def parse_workflow(path: str) -> Workflow:
 
 
 def _str_dict(d: dict) -> dict:
-    return {str(k): str(v) for k, v in d.items()}
+    return {str(k): str(v).lower() if isinstance(v, bool) else str(v) for k, v in d.items()}

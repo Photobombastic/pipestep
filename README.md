@@ -24,7 +24,7 @@ A single debugging session eats 30-60 minutes. PipeStep lets you step through th
 ## Install
 
 ```bash
-pip install git+https://github.com/photobombastic/pipestep.git
+pip install pipestep
 ```
 
 Requires Python 3.11+ and Docker Desktop running.

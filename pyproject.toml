@@ -26,10 +26,9 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
 ]
 dependencies = [
-    "docker",
-    "textual",
-    "pyyaml",
-    "rich",
+    "docker>=7.0,<9",
+    "textual>=0.70,<2",
+    "pyyaml>=6.0,<7",
 ]
 
 [project.optional-dependencies]

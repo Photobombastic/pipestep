@@ -1,3 +1,7 @@
+"""Terminal UI for interactive pipeline debugging using Textual."""
+
+from __future__ import annotations
+
 import atexit
 import subprocess
 from textual.app import App, ComposeResult

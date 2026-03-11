@@ -1,3 +1,7 @@
+"""Command-line interface for PipeStep."""
+
+from __future__ import annotations
+
 import sys
 import os
 import yaml
@@ -5,7 +9,8 @@ from pipestep import __version__
 from pipestep.parser import parse_workflow
 
 
-def main():
+def main() -> None:
+    """Entry point for the pipestep CLI."""
     try:
         _run()
     except KeyboardInterrupt:
@@ -20,7 +25,7 @@ def main():
         sys.exit(1)
 
 
-def _run():
+def _run() -> None:
     if len(sys.argv) == 2 and sys.argv[1] in ("--version", "-V"):
         print(f"pipestep {__version__}")
         sys.exit(0)
@@ -102,7 +107,8 @@ def _run():
     app.run()
 
 
-def _print_help():
+def _print_help() -> None:
+    """Print CLI usage information."""
     print(f"pipestep {__version__} — Interactive CI pipeline debugger")
     print()
     print("Usage: pipestep run <workflow.yml> [options]")

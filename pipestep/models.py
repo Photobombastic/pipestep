@@ -1,8 +1,14 @@
+"""Data models for workflows, jobs, steps, and execution results."""
+
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
 
 
 class StepStatus(Enum):
+    """Execution state of a pipeline step."""
+
     PENDING = "pending"
     RUNNING = "running"
     PAUSED = "paused"
@@ -13,6 +19,8 @@ class StepStatus(Enum):
 
 @dataclass
 class Step:
+    """A single step within a CI job (either a shell command or an action reference)."""
+
     name: str
     command: str
     env: dict = field(default_factory=dict)
@@ -27,6 +35,8 @@ class Step:
 
 @dataclass
 class Job:
+    """A CI job containing a sequence of steps and a target runner image."""
+
     name: str
     runs_on: str
     docker_image: str
@@ -36,6 +46,8 @@ class Job:
 
 @dataclass
 class Workflow:
+    """A parsed GitHub Actions workflow with one or more jobs."""
+
     name: str
     trigger: str
     jobs: list[Job] = field(default_factory=list)
@@ -43,6 +55,8 @@ class Workflow:
 
 @dataclass
 class StepResult:
+    """Output captured from executing a single step in the container."""
+
     exit_code: int
     stdout: str
     stderr: str

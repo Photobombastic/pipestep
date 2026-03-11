@@ -1,3 +1,7 @@
+"""Docker-based execution engine for running pipeline steps in containers."""
+
+from __future__ import annotations
+
 import os
 import shlex
 import subprocess
@@ -8,7 +12,9 @@ from pipestep.models import Step, Job, StepResult
 
 
 class PipelineEngine:
-    def __init__(self, job: Job, workdir: str = "."):
+    """Manages a Docker container that executes pipeline steps sequentially."""
+
+    def __init__(self, job: Job, workdir: str = ".") -> None:
         self.job = job
         self.workdir = workdir
         try:
@@ -22,11 +28,13 @@ class PipelineEngine:
 
     @property
     def container_id(self) -> str:
+        """Return the running container's ID, or empty string if none."""
         if self.container is None:
             return ""
         return self.container.id
 
     def setup(self) -> None:
+        """Pull the Docker image and start a long-running container."""
         image = self.job.docker_image
 
         try:
@@ -81,6 +89,7 @@ class PipelineEngine:
         )
 
     def run_step(self, step: Step) -> StepResult:
+        """Execute a step's shell command inside the container."""
         if self.container is None:
             raise RuntimeError("Engine not set up. Call setup() first.")
 
@@ -104,6 +113,7 @@ class PipelineEngine:
         )
 
     def get_env(self) -> dict:
+        """Return the container's current environment variables."""
         if self.container is None:
             return {}
         result = self.container.exec_run("env", demux=True)
@@ -116,6 +126,7 @@ class PipelineEngine:
         return env
 
     def get_files(self, path: str = "/workspace") -> list[str]:
+        """List files at the given path inside the container."""
         if self.container is None:
             return []
         result = self.container.exec_run(f"ls -1 {shlex.quote(path)}", demux=True)
@@ -123,6 +134,7 @@ class PipelineEngine:
         return [f for f in stdout.strip().split("\n") if f]
 
     def cleanup(self) -> None:
+        """Stop and remove the container, ignoring errors during teardown."""
         if self.container is not None:
             try:
                 self.container.stop(timeout=3)

@@ -1,3 +1,7 @@
+"""Parser for GitHub Actions workflow YAML files."""
+
+from __future__ import annotations
+
 import sys
 import yaml
 from pipestep.models import Workflow, Job, Step
@@ -11,6 +15,7 @@ IMAGE_MAP = {
 
 
 def parse_workflow(path: str) -> Workflow:
+    """Parse a GitHub Actions YAML file into a Workflow model."""
     with open(path) as f:
         raw = yaml.safe_load(f)
 
@@ -92,6 +97,7 @@ def parse_workflow(path: str) -> Workflow:
 
 
 def _str_dict(d: dict) -> dict:
+    """Coerce all keys and values to strings, normalizing None and booleans."""
     result = {}
     for k, v in d.items():
         if v is None:

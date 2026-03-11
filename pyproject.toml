@@ -42,6 +42,15 @@ Homepage = "https://github.com/photobombastic/pipestep"
 Repository = "https://github.com/photobombastic/pipestep"
 Issues = "https://github.com/photobombastic/pipestep/issues"
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "pipestep/",
+    "tests/",
+    "LICENSE",
+    "README.md",
+    "pyproject.toml",
+]
+
 [tool.hatch.version]
 path = "pipestep/__init__.py"
 

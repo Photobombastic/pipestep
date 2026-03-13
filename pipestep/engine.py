@@ -3,12 +3,36 @@
 from __future__ import annotations
 
 import os
+import atexit
 import shlex
+import signal
 import subprocess
 
 import docker
 from docker.errors import NotFound, ImageNotFound
 from pipestep.models import Step, Job, StepResult
+
+# Module-level registry so atexit/signal handlers can find all engines
+_active_engines: list["PipelineEngine"] = []
+
+
+def _cleanup_all_engines() -> None:
+    for engine in list(_active_engines):
+        engine.cleanup()
+
+
+atexit.register(_cleanup_all_engines)
+
+
+def _signal_handler(signum, frame) -> None:
+    _cleanup_all_engines()
+    raise SystemExit(1)
+
+
+# Install signal handlers only if we're not going to clobber existing ones
+for _sig in (signal.SIGTERM, signal.SIGINT):
+    if signal.getsignal(_sig) in (signal.SIG_DFL, None):
+        signal.signal(_sig, _signal_handler)
 
 
 class PipelineEngine:
@@ -95,6 +119,8 @@ class PipelineEngine:
             name=self._container_name,
             detach=True,
         )
+        if self not in _active_engines:
+            _active_engines.append(self)
 
     def run_step(self, step: Step) -> StepResult:
         """Execute a step's shell command inside the container."""
@@ -153,3 +179,11 @@ class PipelineEngine:
             except Exception:
                 pass
             self.container = None
+        if self in _active_engines:
+            _active_engines.remove(self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.cleanup()

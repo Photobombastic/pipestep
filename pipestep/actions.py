@@ -73,8 +73,9 @@ def _setup_java_equiv(inputs: dict) -> tuple[str, str]:
 
 
 def _noop_equiv(desc: str) -> Callable:
+    import shlex
     def _equiv(inputs: dict) -> tuple[str, str]:
-        return desc, f"echo '{desc}'"
+        return desc, f"echo {shlex.quote(desc)}"
     return _equiv
 
 

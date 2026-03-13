@@ -263,3 +263,22 @@ jobs:
     wf = parse_workflow(path)
     assert wf.jobs[0].docker_image == "ubuntu:22.04"  # default fallback
     os.unlink(path)
+
+
+def test_env_as_string_does_not_crash():
+    """Bug #3: env: 'something' (string) should not crash the parser."""
+    path = _write_yaml("""
+name: String env
+"on": push
+env: "some-string"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env: "another-string"
+    steps:
+      - run: echo hi
+        env: "step-string"
+""")
+    wf = parse_workflow(path)
+    assert len(wf.jobs[0].steps) == 1
+    os.unlink(path)

@@ -98,16 +98,22 @@ def _run() -> None:
             print("Invalid choice. Try again.")
 
     run_steps = [s for s in job.steps if not s.is_action]
+    action_steps = len(job.steps) - len(run_steps)
     print(f"\nJob: {job.name}")
     print(f"Image: {job.docker_image}")
-    print(f"Steps: {len(job.steps)} total, {len(run_steps)} runnable")
+    print(f"Steps: {len(job.steps)} total, {len(run_steps)} runnable, {action_steps} actions")
 
-    if len(run_steps) == 0:
-        print("\nError: This workflow has no runnable steps — only GitHub Actions (uses:).")
-        print("PipeStep can only debug shell commands (run: steps).")
-        print("See: https://github.com/photobombastic/pipestep#limitations")
+    if len(job.steps) == 0:
+        print("\nError: This job has no steps defined.")
         sys.exit(1)
 
+    if action_steps > 0 and len(run_steps) == 0:
+        print("\nNote: This workflow only has action steps (uses:).")
+        print("PipeStep will offer local equivalents where available.")
+
+    print()
+    print(f"⚠  {workdir} will be mounted read-write into the container.")
+    print(f"   Steps can modify your files. Use --workdir to mount a copy if concerned.")
     print()
 
     from pipestep.tui import PipeStepApp

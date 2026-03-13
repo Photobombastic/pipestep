@@ -165,9 +165,8 @@ class PipeStepApp(App):
         self._log(f"Job: {self.job.name} ({self.job.docker_image})")
 
         # Show parser warnings in the TUI (e.g., unmapped runs-on)
-        if hasattr(self.workflow, '_parser_warnings'):
-            for warn in self.workflow._parser_warnings:
-                self._log(f"[yellow]  ⚠ {warn}[/yellow]")
+        for warn in self.workflow.warnings:
+            self._log(f"[yellow]  ⚠ {warn}[/yellow]")
 
         self._log("")
         self._log("Setting up Docker container...")
@@ -501,9 +500,19 @@ class PipeStepApp(App):
 
     def _do_quit(self) -> None:
         if self.session_log:
-            session_path = f"pipestep-session-{__import__('time').strftime('%Y%m%d-%H%M%S')}.sh"
-            self._save_session(session_path)
-            self._log(f"\n[green]Session saved to {session_path}[/green]")
+            import tempfile
+            session_name = f"pipestep-session-{__import__('time').strftime('%Y%m%d-%H%M%S')}.sh"
+            try:
+                self._save_session(session_name)
+                self._log(f"\n[green]Session saved to {session_name}[/green]")
+            except OSError:
+                # Fall back to temp dir if cwd is read-only
+                fallback = __import__('os').path.join(tempfile.gettempdir(), session_name)
+                try:
+                    self._save_session(fallback)
+                    self._log(f"\n[green]Session saved to {fallback}[/green]")
+                except OSError:
+                    self._log("\n[yellow]Could not save session recording.[/yellow]")
         self._log("\nCleaning up container...")
         self.engine.cleanup()
         self.exit()

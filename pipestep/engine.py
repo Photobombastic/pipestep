@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import atexit
 import shlex
 import signal
@@ -43,7 +44,8 @@ class PipelineEngine:
         self.workdir = os.path.abspath(workdir)
         self._client = None
         self.container = None
-        self._container_name = f"pipestep-{job.name}-{os.getpid()}"
+        safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '-', job.name)
+        self._container_name = f"pipestep-{safe_name}-{os.getpid()}"
 
     @property
     def client(self):

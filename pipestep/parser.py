@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 import yaml
 from pipestep.models import Workflow, Job, Step
@@ -54,6 +55,13 @@ def parse_workflow(path: str) -> Workflow:
         else:
             runs_on_key = str(runs_on)
 
+        # Detect matrix/expression placeholders that can't be resolved locally
+        if re.search(r'\$\{\{', runs_on_key):
+            msg = f"Job '{job_id}': runs-on uses expression '{runs_on_key}' which can't be resolved locally. Using ubuntu:22.04."
+            warnings.append(msg)
+            print(f"\u26a0 Warning: {msg}", file=sys.stderr)
+            runs_on_key = "ubuntu-latest"
+
         # Check for container: at job level first
         container_raw = job_raw.get("container", None)
         if isinstance(container_raw, str):
@@ -94,6 +102,15 @@ def parse_workflow(path: str) -> Workflow:
                     working_dir = f"/workspace/{working_dir}"
                 elif working_dir is None:
                     working_dir = "/workspace"
+
+                # Warn about unresolvable expressions in commands
+                expressions = re.findall(r'\$\{\{[^}]*\}\}', command)
+                matrix_exprs = [e for e in expressions if 'matrix.' in e or 'secrets.' in e or 'github.' in e]
+                if matrix_exprs:
+                    msg = f"Step '{step_name}': contains expressions {', '.join(matrix_exprs[:3])} that won't resolve locally."
+                    warnings.append(msg)
+                    print(f"\u26a0 Warning: {msg}", file=sys.stderr)
+
                 steps.append(Step(
                     name=step_name,
                     command=command,
@@ -109,13 +126,13 @@ def parse_workflow(path: str) -> Workflow:
             env={**workflow_env, **job_env},
         ))
 
-    wf = Workflow(name=name, trigger=trigger, jobs=jobs)
-    wf._parser_warnings = warnings
-    return wf
+    return Workflow(name=name, trigger=trigger, jobs=jobs, warnings=warnings)
 
 
 def _str_dict(d: dict) -> dict:
     """Coerce all keys and values to strings, normalizing None and booleans."""
+    if not isinstance(d, dict):
+        return {}
     result = {}
     for k, v in d.items():
         if v is None:

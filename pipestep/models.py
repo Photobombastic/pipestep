@@ -53,6 +53,7 @@ class Workflow:
     name: str
     trigger: str
     jobs: list[Job] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass

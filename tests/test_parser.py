@@ -128,8 +128,8 @@ def test_workflow_with_no_jobs():
 name: No jobs
 on: push
 """)
-    wf = parse_workflow(path)
-    assert len(wf.jobs) == 0
+    with pytest.raises(ValueError, match="no 'jobs' section"):
+        parse_workflow(path)
     os.unlink(path)
 
 

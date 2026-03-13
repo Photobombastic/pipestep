@@ -77,12 +77,14 @@ def parse_workflow(path: str) -> Workflow:
             if "uses" in step_raw:
                 action_ref = step_raw["uses"]
                 step_name = step_raw.get("name", f"Action: {action_ref}")
+                action_with = _str_dict(step_raw.get("with", {}))
                 steps.append(Step(
                     name=step_name,
                     command="",
                     env=step_env,
                     is_action=True,
                     action_ref=action_ref,
+                    action_with=action_with,
                 ))
             elif "run" in step_raw:
                 command = step_raw["run"].strip()

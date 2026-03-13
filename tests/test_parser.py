@@ -231,6 +231,25 @@ jobs:
     os.unlink(path)
 
 
+def test_action_with_inputs_parsed():
+    path = _write_yaml("""
+name: With inputs
+"on": push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+""")
+    wf = parse_workflow(path)
+    step = wf.jobs[0].steps[0]
+    assert step.is_action is True
+    assert step.action_with == {"node-version": "18"}
+    os.unlink(path)
+
+
 def test_unrecognized_runs_on():
     path = _write_yaml("""
 name: Custom runner

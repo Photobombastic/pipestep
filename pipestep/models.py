@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Optional
 
 
 class StepStatus(Enum):
@@ -29,8 +30,9 @@ class Step:
     breakpoint: bool = False
     is_action: bool = False
     action_ref: str = ""
+    action_with: dict = field(default_factory=dict)
     output: str = ""
-    exit_code: int | None = None
+    exit_code: Optional[int] = None
 
 
 @dataclass

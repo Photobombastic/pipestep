@@ -66,7 +66,7 @@ class StepDetailPanel(Static):
             env_str += f", ... (+{len(step.env) - 5} more)"
 
         if step.is_action:
-            equiv = get_action_equivalent(step.action_ref)
+            equiv = get_action_equivalent(step.action_ref, step.action_with)
             if equiv:
                 cmd_display = f"Action: {step.action_ref}\n[green]Equivalent: {equiv[0]}[/green]\n  Press [bold]R[/bold] to run equivalent, [bold]S[/bold] to skip, [bold]I[/bold] to shell in"
             else:
@@ -192,7 +192,7 @@ class PipeStepApp(App):
         self._refresh_step(0)
         self._select_step(0)
         if step.is_action:
-            equiv = get_action_equivalent(step.action_ref)
+            equiv = get_action_equivalent(step.action_ref, step.action_with)
             self._log(f"[cyan]● Paused at action: {step.name}[/cyan]")
             if equiv:
                 self._log(f"  [green]Local equivalent available:[/green] {equiv[0]}")
@@ -260,7 +260,7 @@ class PipeStepApp(App):
 
         # Handle action steps: run equivalent command if available
         if step.is_action:
-            equiv = get_action_equivalent(step.action_ref)
+            equiv = get_action_equivalent(step.action_ref, step.action_with)
             if equiv is None:
                 self._log(f"[yellow]No local equivalent for {step.action_ref}[/yellow]")
                 self._log("  Press [bold]I[/bold] to shell in and set up manually, or [bold]S[/bold] to skip")
@@ -360,7 +360,7 @@ class PipeStepApp(App):
 
             if step.is_action and self._auto_running:
                 # In auto-run mode, try to run action equivalents automatically
-                equiv = get_action_equivalent(step.action_ref)
+                equiv = get_action_equivalent(step.action_ref, step.action_with)
                 if equiv:
                     self._log(f"\n[dim]Auto-running equivalent for: {step.name}[/dim]")
                     self.action_run_step()
@@ -375,7 +375,7 @@ class PipeStepApp(App):
 
             if not self._auto_running:
                 if step.is_action:
-                    equiv = get_action_equivalent(step.action_ref)
+                    equiv = get_action_equivalent(step.action_ref, step.action_with)
                     self._log(f"\n[cyan]● Paused at action: {step.name}[/cyan]")
                     if equiv:
                         self._log(f"  [green]Local equivalent:[/green] {equiv[0]}")

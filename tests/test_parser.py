@@ -1,7 +1,17 @@
 import os
+import tempfile
+import pytest
 from pipestep.parser import parse_workflow
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+
+
+def _write_yaml(content: str) -> str:
+    """Write content to a temp YAML file and return its path."""
+    f = tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False)
+    f.write(content)
+    f.close()
+    return f.name
 
 
 def test_parse_workflow_name():
@@ -72,3 +82,165 @@ def test_working_directory():
 def test_step_count():
     wf = parse_workflow(os.path.join(FIXTURES, "simple_workflow.yml"))
     assert len(wf.jobs[0].steps) == 5
+
+
+# --- Edge case tests ---
+
+
+def test_empty_yaml_raises():
+    path = _write_yaml("")
+    with pytest.raises(ValueError, match="Invalid workflow file"):
+        parse_workflow(path)
+    os.unlink(path)
+
+
+def test_runs_on_as_list():
+    path = _write_yaml("""
+name: Self-hosted
+on: push
+jobs:
+  build:
+    runs-on: [self-hosted, linux]
+    steps:
+      - run: echo hello
+""")
+    wf = parse_workflow(path)
+    assert wf.jobs[0].runs_on == "self-hosted"
+    assert wf.jobs[0].docker_image == "ubuntu:22.04"  # fallback
+    os.unlink(path)
+
+
+def test_job_with_no_steps():
+    path = _write_yaml("""
+name: Empty
+on: push
+jobs:
+  empty:
+    runs-on: ubuntu-latest
+""")
+    wf = parse_workflow(path)
+    assert len(wf.jobs[0].steps) == 0
+    os.unlink(path)
+
+
+def test_workflow_with_no_jobs():
+    path = _write_yaml("""
+name: No jobs
+on: push
+""")
+    wf = parse_workflow(path)
+    assert len(wf.jobs) == 0
+    os.unlink(path)
+
+
+def test_trigger_string():
+    path = _write_yaml("""
+name: Simple
+"on": push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+""")
+    wf = parse_workflow(path)
+    assert "push" in wf.trigger
+    os.unlink(path)
+
+
+def test_trigger_list():
+    path = _write_yaml("""
+name: Multi trigger
+"on": [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+""")
+    wf = parse_workflow(path)
+    assert "push" in wf.trigger
+    assert "pull_request" in wf.trigger
+    os.unlink(path)
+
+
+def test_boolean_env_lowercase():
+    path = _write_yaml("""
+name: Bool env
+"on": push
+env:
+  CI: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo $CI
+""")
+    wf = parse_workflow(path)
+    assert wf.jobs[0].steps[0].env["CI"] == "true"
+    os.unlink(path)
+
+
+def test_container_at_job_level():
+    path = _write_yaml("""
+name: Container job
+"on": push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: node:18
+    steps:
+      - run: node --version
+""")
+    wf = parse_workflow(path)
+    assert wf.jobs[0].docker_image == "node:18"
+    os.unlink(path)
+
+
+def test_container_as_dict():
+    path = _write_yaml("""
+name: Container dict
+"on": push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.12
+    steps:
+      - run: python --version
+""")
+    wf = parse_workflow(path)
+    assert wf.jobs[0].docker_image == "python:3.12"
+    os.unlink(path)
+
+
+def test_only_action_steps():
+    path = _write_yaml("""
+name: Actions only
+"on": push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+""")
+    wf = parse_workflow(path)
+    assert len(wf.jobs[0].steps) == 2
+    assert all(s.is_action for s in wf.jobs[0].steps)
+    os.unlink(path)
+
+
+def test_unrecognized_runs_on():
+    path = _write_yaml("""
+name: Custom runner
+"on": push
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - run: echo hi
+""")
+    wf = parse_workflow(path)
+    assert wf.jobs[0].docker_image == "ubuntu:22.04"  # default fallback
+    os.unlink(path)

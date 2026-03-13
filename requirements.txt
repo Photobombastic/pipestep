@@ -2,3 +2,4 @@ docker
 textual
 pyyaml
 rich
+pytest

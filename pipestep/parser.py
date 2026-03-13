@@ -47,11 +47,27 @@ def parse_workflow(path: str) -> Workflow:
     jobs = []
     for job_id, job_raw in raw.get("jobs", {}).items():
         runs_on = job_raw.get("runs-on", "ubuntu-latest")
-        docker_image = IMAGE_MAP.get(runs_on, "ubuntu:22.04")
-        if runs_on not in IMAGE_MAP:
-            msg = f"'{runs_on}' has no local Docker mapping. Using ubuntu:22.04 as fallback."
+
+        # Handle runs-on as a list (e.g. [self-hosted, linux])
+        if isinstance(runs_on, list):
+            runs_on_key = runs_on[0] if runs_on else "ubuntu-latest"
+        else:
+            runs_on_key = str(runs_on)
+
+        # Check for container: at job level first
+        container_raw = job_raw.get("container", None)
+        if isinstance(container_raw, str):
+            docker_image = container_raw
+        elif isinstance(container_raw, dict):
+            docker_image = container_raw.get("image", IMAGE_MAP.get(runs_on_key, "ubuntu:22.04"))
+        else:
+            docker_image = IMAGE_MAP.get(runs_on_key, "ubuntu:22.04")
+
+        if runs_on_key not in IMAGE_MAP and container_raw is None:
+            msg = f"'{runs_on_key}' has no local Docker mapping. Using ubuntu:22.04 as fallback."
             warnings.append(msg)
             print(f"\u26a0 Warning: {msg}", file=sys.stderr)
+
         job_env = _str_dict(job_raw.get("env", {}))
 
         steps = []
@@ -85,7 +101,7 @@ def parse_workflow(path: str) -> Workflow:
 
         jobs.append(Job(
             name=job_id,
-            runs_on=runs_on,
+            runs_on=runs_on_key,
             docker_image=docker_image,
             steps=steps,
             env={**workflow_env, **job_env},

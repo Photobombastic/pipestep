@@ -10,10 +10,11 @@ from textual.widgets import Header, Footer, Static, RichLog, ListView, ListItem,
 from textual.css.query import NoMatches
 from textual.reactive import reactive
 from textual import work
-from rich.markup import escape
+from rich.text import Text
 
 from pipestep.models import Step, Job, Workflow, StepStatus, StepResult
 from pipestep.engine import PipelineEngine
+from pipestep.actions import get_action_equivalent
 
 
 class StepListItem(ListItem):
@@ -30,8 +31,13 @@ class StepListItem(ListItem):
     def _render_label(self) -> str:
         icon = self._status_icon()
         bp = " [magenta][B][/magenta]" if self.step.breakpoint else ""
-        tag = " [dim](action — skipped)[/dim]" if self.step.is_action else ""
-        return f"{icon} {self.step_index + 1}. {escape(self.step.name)}{tag}{bp}"
+        if self.step.is_action and self.step.status == StepStatus.SKIPPED:
+            tag = " [dim](action — skipped)[/dim]"
+        elif self.step.is_action:
+            tag = " [yellow](action)[/yellow]"
+        else:
+            tag = ""
+        return f"{icon} {self.step_index + 1}. {self.step.name}{tag}{bp}"
 
     def _status_icon(self) -> str:
         icons = {
@@ -60,7 +66,11 @@ class StepDetailPanel(Static):
             env_str += f", ... (+{len(step.env) - 5} more)"
 
         if step.is_action:
-            cmd_display = f"[dim]Action: {step.action_ref} (skipped in local mode)[/dim]"
+            equiv = get_action_equivalent(step.action_ref)
+            if equiv:
+                cmd_display = f"Action: {step.action_ref}\n[green]Equivalent: {equiv[0]}[/green]\n  Press [bold]R[/bold] to run equivalent, [bold]S[/bold] to skip, [bold]I[/bold] to shell in"
+            else:
+                cmd_display = f"Action: {step.action_ref}\n[yellow]No local equivalent known[/yellow]\n  Press [bold]S[/bold] to skip, [bold]I[/bold] to shell in and set up manually"
         else:
             cmd_lines = step.command.split("\n")
             if len(cmd_lines) > 5:
@@ -117,6 +127,7 @@ class PipeStepApp(App):
         ("q", "quit_app", "Quit"),
     ]
 
+
     current_step_index = reactive(0)
     running = reactive(False)
 
@@ -130,6 +141,7 @@ class PipeStepApp(App):
         self.title = f"PipeStep — {workflow.name} → {job.name}"
         self._auto_running = False
         self._quit_pending = False
+        self.session_log: list[dict] = []
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -142,7 +154,7 @@ class PipeStepApp(App):
                 yield StepDetailPanel(id="step-detail")
                 yield RichLog(highlight=True, markup=True, auto_scroll=True, id="output-log")
                 yield Static(
-                    "[R]un  [S]kip  [I]nspect Shell  [B]reakpoint  [N] Run to BP  [Q]uit",
+                    "[R]un / Run Equivalent  [S]kip  [I]nspect Shell  [B]reakpoint  [N] Run to BP  [Q]uit",
                     id="help-bar",
                 )
         yield Footer()
@@ -171,21 +183,26 @@ class PipeStepApp(App):
             self.call_from_thread(self._log, f"[red]Setup failed: {e}[/red]")
 
     def _advance_to_first_runnable(self) -> None:
-        for i, step in enumerate(self.job.steps):
-            if step.is_action:
-                step.status = StepStatus.SKIPPED
-                self._refresh_step(i)
+        if len(self.job.steps) == 0:
+            self._log("[yellow]No steps found in this job.[/yellow]")
+            return
+        step = self.job.steps[0]
+        self.current_step_index = 0
+        step.status = StepStatus.PAUSED
+        self._refresh_step(0)
+        self._select_step(0)
+        if step.is_action:
+            equiv = get_action_equivalent(step.action_ref)
+            self._log(f"[cyan]● Paused at action: {step.name}[/cyan]")
+            if equiv:
+                self._log(f"  [green]Local equivalent available:[/green] {equiv[0]}")
+                self._log("  Press [bold]R[/bold] to run equivalent, [bold]S[/bold] to skip, [bold]I[/bold] to shell in")
             else:
-                self.current_step_index = i
-                step.status = StepStatus.PAUSED
-                self._refresh_step(i)
-                self._select_step(i)
-                self._log(f"[cyan]● Paused at: {step.name}[/cyan]")
-                self._log("  Press [bold]R[/bold] to run, [bold]S[/bold] to skip, [bold]I[/bold] to inspect")
-                return
-        # All steps are actions — nothing runnable
-        self._log("[yellow]No runnable steps found. All steps are GitHub Actions (uses:).[/yellow]")
-        self._log("PipeStep can only debug run: steps. Press [bold]Q[/bold] to quit.")
+                self._log("  [yellow]No local equivalent known.[/yellow]")
+                self._log("  Press [bold]S[/bold] to skip, [bold]I[/bold] to shell in and set up manually")
+        else:
+            self._log(f"[cyan]● Paused at: {step.name}[/cyan]")
+            self._log("  Press [bold]R[/bold] to run, [bold]S[/bold] to skip, [bold]I[/bold] to inspect")
 
     def _current_step(self) -> Step | None:
         if 0 <= self.current_step_index < len(self.job.steps):
@@ -235,16 +252,42 @@ class PipeStepApp(App):
             self.notify("Step is still running...", severity="information")
             return
         step = self._current_step()
-        if step is None or step.is_action:
+        if step is None:
             return
         if step.status not in (StepStatus.PAUSED, StepStatus.PENDING, StepStatus.FAILED):
             return
         self._quit_pending = False
+
+        # Handle action steps: run equivalent command if available
+        if step.is_action:
+            equiv = get_action_equivalent(step.action_ref)
+            if equiv is None:
+                self._log(f"[yellow]No local equivalent for {step.action_ref}[/yellow]")
+                self._log("  Press [bold]I[/bold] to shell in and set up manually, or [bold]S[/bold] to skip")
+                return
+            self.running = True
+            step.status = StepStatus.RUNNING
+            self._refresh_step(self.current_step_index)
+            self._update_detail_panel()
+            self._log(f"\n[bold]> Running equivalent for: {step.name}[/bold]")
+            self._log(f"  [dim]{equiv[0]}[/dim]")
+            # Create a temporary step-like object with the equivalent command
+            equiv_step = Step(
+                name=step.name,
+                command=equiv[1],
+                env=step.env,
+                working_directory="/workspace",
+            )
+            self._record_action("run_equivalent", step.name, equiv[1])
+            self._execute_step(equiv_step, self.current_step_index)
+            return
+
         self.running = True
         step.status = StepStatus.RUNNING
         self._refresh_step(self.current_step_index)
         self._update_detail_panel()
         self._log(f"\n[bold]> Running: {step.name}[/bold]")
+        self._record_action("run", step.name, step.command)
         self._execute_step(step, self.current_step_index)
 
     @work(thread=True)
@@ -261,15 +304,18 @@ class PipeStepApp(App):
             )
 
     def _on_step_complete(self, step: Step, index: int, result: StepResult) -> None:
-        step.exit_code = result.exit_code
-        step.output = result.stdout + result.stderr
+        # Always update the real job step (step might be a temp equiv_step)
+        real_step = self.job.steps[index]
+        real_step.exit_code = result.exit_code
+        real_step.output = result.stdout + result.stderr
+        step = real_step
 
         if result.stdout:
             for line in result.stdout.rstrip().split("\n"):
-                self._log(f"  {escape(line)}")
+                self._log(Text(f"  {line}"))
         if result.stderr:
             for line in result.stderr.rstrip().split("\n"):
-                self._log(f"  [red]{escape(line)}[/red]")
+                self._log(Text(f"  {line}", style="red"))
 
         if result.exit_code == 0:
             step.status = StepStatus.COMPLETED
@@ -306,18 +352,39 @@ class PipeStepApp(App):
         idx = self.current_step_index + 1
         while idx < len(self.job.steps):
             step = self.job.steps[idx]
-            if step.is_action:
-                step.status = StepStatus.SKIPPED
-                self._refresh_step(idx)
-                idx += 1
-                continue
             step.status = StepStatus.PAUSED
             self.current_step_index = idx
             self._refresh_step(idx)
             self._select_step(idx)
             self._update_detail_panel()
+
+            if step.is_action and self._auto_running:
+                # In auto-run mode, try to run action equivalents automatically
+                equiv = get_action_equivalent(step.action_ref)
+                if equiv:
+                    self._log(f"\n[dim]Auto-running equivalent for: {step.name}[/dim]")
+                    self.action_run_step()
+                    return
+                else:
+                    # Can't auto-run unknown actions, pause
+                    self._auto_running = False
+                    self._log(f"\n[cyan]● Paused at action: {step.name}[/cyan]")
+                    self._log("  [yellow]No local equivalent — cannot auto-run[/yellow]")
+                    self._log("  Press [bold]S[/bold] to skip, [bold]I[/bold] to shell in")
+                    return
+
             if not self._auto_running:
-                self._log(f"\n[cyan]● Paused at: {step.name}[/cyan]")
+                if step.is_action:
+                    equiv = get_action_equivalent(step.action_ref)
+                    self._log(f"\n[cyan]● Paused at action: {step.name}[/cyan]")
+                    if equiv:
+                        self._log(f"  [green]Local equivalent:[/green] {equiv[0]}")
+                        self._log("  Press [bold]R[/bold] to run equivalent, [bold]S[/bold] to skip, [bold]I[/bold] to shell in")
+                    else:
+                        self._log("  [yellow]No local equivalent known.[/yellow]")
+                        self._log("  Press [bold]S[/bold] to skip, [bold]I[/bold] to shell in")
+                else:
+                    self._log(f"\n[cyan]● Paused at: {step.name}[/cyan]")
             return
         # All steps done
         self.current_step_index = len(self.job.steps)
@@ -336,6 +403,7 @@ class PipeStepApp(App):
         step.status = StepStatus.SKIPPED
         self._refresh_step(self.current_step_index)
         self._log(f"[dim]  ⊘ Skipped: {step.name}[/dim]")
+        self._record_action("skip", step.name)
         self._advance_to_next()
 
     def action_shell_in(self) -> None:
@@ -360,6 +428,7 @@ class PipeStepApp(App):
             ret = subprocess.call(cmd + [container_id, "/bin/bash"])
             if ret != 0:
                 subprocess.call(cmd + [container_id, "/bin/sh"])
+        self._record_action("shell_in", step.name if step else "unknown")
         self._log("[cyan]Returned from shell.[/cyan]\n")
 
     def action_toggle_breakpoint(self) -> None:
@@ -370,9 +439,6 @@ class PipeStepApp(App):
         highlighted = list_view.index
         if highlighted is not None and 0 <= highlighted < len(self.job.steps):
             step = self.job.steps[highlighted]
-            if step.is_action:
-                self.notify("Can't set breakpoint on action steps", severity="warning")
-                return
             step.breakpoint = not step.breakpoint
             tag = "set" if step.breakpoint else "removed"
             self._log(f"[magenta]  Breakpoint {tag}: {step.name}[/magenta]")
@@ -392,6 +458,33 @@ class PipeStepApp(App):
         self._log("\n[dim]Auto-running to next breakpoint...[/dim]")
         self.action_run_step()
 
+    def _record_action(self, action: str, step_name: str, command: str = "") -> None:
+        import time
+        self.session_log.append({
+            "time": time.strftime("%H:%M:%S"),
+            "action": action,
+            "step": step_name,
+            "command": command,
+        })
+
+    def _save_session(self, path: str) -> None:
+        lines = [
+            "#!/usr/bin/env bash",
+            f"# PipeStep session recording — {self.workflow.name} / {self.job.name}",
+            f"# Image: {self.job.docker_image}",
+            f"# Recorded: {__import__('time').strftime('%Y-%m-%d %H:%M:%S')}",
+            "",
+        ]
+        for entry in self.session_log:
+            lines.append(f"# [{entry['time']}] {entry['action']}: {entry['step']}")
+            if entry["command"]:
+                lines.append(entry["command"])
+            lines.append("")
+        import os
+        with open(path, "w") as f:
+            f.write("\n".join(lines))
+        os.chmod(path, 0o755)
+
     def action_quit_app(self) -> None:
         if self.running:
             self.notify("Step is running. Press Q again to force quit.", severity="warning")
@@ -407,6 +500,10 @@ class PipeStepApp(App):
         self._do_quit()
 
     def _do_quit(self) -> None:
+        if self.session_log:
+            session_path = f"pipestep-session-{__import__('time').strftime('%Y%m%d-%H%M%S')}.sh"
+            self._save_session(session_path)
+            self._log(f"\n[green]Session saved to {session_path}[/green]")
         self._log("\nCleaning up container...")
         self.engine.cleanup()
         self.exit()

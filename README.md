@@ -24,7 +24,15 @@ A single debugging session eats 30-60 minutes. PipeStep lets you step through th
 ## Install
 
 ```bash
+# Prerequisites: Docker Desktop running, Python 3.11+
 pip install pipestep
+# or from source:
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Pre-pull the base image
+docker pull ubuntu:22.04
 ```
 
 Requires Python 3.11+ and Docker Desktop running.
@@ -34,18 +42,36 @@ Requires Python 3.11+ and Docker Desktop running.
 ```bash
 # Point it at any GitHub Actions workflow in your project
 pipestep run .github/workflows/ci.yml
+# or from source:
+python cli.py run sample_workflow.yml
 ```
 
 ## Controls
 
 | Key | Action |
 |-----|--------|
-| **R** | Run the current step |
+| **R** | Run the current step (or run local equivalent for action steps) |
 | **S** | Skip the current step |
 | **I** | Shell into the container (interactive bash) |
 | **B** | Toggle breakpoint on a step |
 | **N** | Auto-run to the next breakpoint |
 | **Q** | Quit and cleanup containers |
+| Arrow keys | Navigate step list |
+
+## Action Steps (`uses:`)
+
+PipeStep pauses at action steps instead of silently skipping them. For common actions, it provides local equivalents that you can run with **R**:
+
+| Action | Local Equivalent |
+|--------|-----------------|
+| `actions/checkout@*` | Workspace already mounted via Docker volume |
+| `actions/setup-node@*` | Installs Node.js via apt |
+| `actions/setup-python@*` | Installs Python via apt |
+| `actions/setup-go@*` | Installs Go via apt |
+| `actions/setup-java@*` | Installs Java via apt |
+| `actions/cache@*` | No-op (caching not needed locally) |
+
+For unknown actions, press **I** to shell into the container and set up manually, or **S** to skip.
 
 ## When a Step Fails
 
@@ -57,6 +83,10 @@ PipeStep pauses and lets you:
 - **Quit** and clean up
 
 No more guessing from log output. You're inside the environment where it broke.
+
+## Session Recording
+
+Every debugging session is automatically recorded. When you quit, PipeStep saves a bash script capturing every step you ran, skipped, or shelled into. Use these recordings to reproduce debugging sessions or as the basis for tests.
 
 ## How It Works
 
@@ -81,7 +111,7 @@ No more guessing from log output. You're inside the environment where it broke.
 
 PipeStep runs your `run:` steps in a local Docker container. It does **not** replicate the full GitHub Actions runtime:
 
-- **GitHub Actions (`uses:`)** are detected and skipped — they're shown in the step list but not executed locally
+- **GitHub Actions (`uses:`)** are detected — best-effort equivalents for common actions, but no full execution
 - **Secrets and `${{ secrets.* }}`** are not available — replace them with local env vars or hardcode test values in the container
 - **Service containers** (`services:`) are not started
 - **Matrix builds** (`strategy.matrix`) are not expanded — pick one combination and test it
@@ -89,6 +119,8 @@ PipeStep runs your `run:` steps in a local Docker container. It does **not** rep
 - **`GITHUB_TOKEN`** and GitHub API access are not provided
 - **Runner OS** is mapped to stock Docker images (`ubuntu-latest` → `ubuntu:22.04`) — pre-installed tools on GitHub's runners may be missing
 - **Apple Silicon** — Docker runs x86 Linux images through emulation on M-series Macs, which is noticeably slower
+- **`if:` conditionals** are not evaluated (all steps are presented)
+- **Shell** is always `bash` (no `pwsh` or custom shells)
 
 These are real constraints. PipeStep's value is debugging your **shell commands** (`run:` steps) in the exact container environment — not emulating the full GitHub Actions platform. For full local runs, use [`act`](https://github.com/nektos/act).
 

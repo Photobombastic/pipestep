@@ -61,7 +61,12 @@ def _run() -> None:
 
     workdir = os.path.abspath(workdir)
 
-    workflow = parse_workflow(workflow_path)
+    try:
+        workflow = parse_workflow(workflow_path)
+    except Exception as e:
+        print(f"Error parsing workflow: {e}")
+        sys.exit(1)
+
     print(f"Workflow: {workflow.name}")
     print(f"Trigger:  {workflow.trigger}")
     print(f"Jobs:     {len(workflow.jobs)}")
@@ -87,6 +92,9 @@ def _run() -> None:
             except EOFError:
                 print("\nError: Non-interactive terminal. Use a single-job workflow.")
                 sys.exit(1)
+            except KeyboardInterrupt:
+                print("\nAborted.")
+                sys.exit(0)
             print("Invalid choice. Try again.")
 
     run_steps = [s for s in job.steps if not s.is_action]

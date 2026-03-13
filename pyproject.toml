@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 authors = [
     { name = "Maxwell Schilling" },
 ]
-keywords = ["ci", "github-actions", "docker", "debugger", "pipeline"]
+keywords = ["ci", "github-actions", "docker", "debugger", "pipeline", "devtools"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -24,11 +24,13 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Testing",
     "Topic :: Software Development :: Build Tools",
+    "Topic :: Software Development :: Debuggers",
 ]
 dependencies = [
     "docker>=7.0,<9",
     "textual>=0.70,<2",
     "pyyaml>=6.0,<7",
+    "rich",
 ]
 
 [project.optional-dependencies]

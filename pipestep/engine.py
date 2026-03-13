@@ -16,15 +16,23 @@ class PipelineEngine:
 
     def __init__(self, job: Job, workdir: str = ".") -> None:
         self.job = job
-        self.workdir = workdir
-        try:
-            self.client = docker.from_env()
-            self.client.ping()
-        except docker.errors.DockerException:
-            print("Error: Can't connect to Docker. Is Docker Desktop running?")
-            raise SystemExit(1)
+        self.workdir = os.path.abspath(workdir)
+        self._client = None
         self.container = None
         self._container_name = f"pipestep-{job.name}-{os.getpid()}"
+
+    @property
+    def client(self):
+        if self._client is None:
+            try:
+                self._client = docker.from_env()
+                self._client.ping()
+            except docker.errors.DockerException as e:
+                raise RuntimeError(
+                    "Cannot connect to Docker. Is Docker Desktop running?\n"
+                    f"  Error: {e}"
+                ) from e
+        return self._client
 
     @property
     def container_id(self) -> str:
